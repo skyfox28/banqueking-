@@ -1,0 +1,6 @@
+# Symboles boursiers dont l'app récupère le cours (format Yahoo Finance), un par ligne.
+# Actions US : AAPL, MSFT…  Bourse de Paris : suffixe .PA (CW8.PA, MC.PA…)
+# Seuls les symboles sont ici : tes quantités et prix d'achat restent sur ton téléphone.
+CW8.PA
+AAPL
+NVDA

@@ -230,13 +230,19 @@ function example() {
       { id: uid(), nom: "Vacances été", cible: 1500, actuel: 420, mensuel: 80 },
     ],
     placements: [
-      { id: uid(), nom: "ETF MSCI World", type: "ETF", investi: 2400, valeur: 2712 },
+      { id: uid(), nom: "Assurance-vie fonds euros", type: "Assurance-vie", investi: 2400, valeur: 2496 },
       { id: uid(), nom: "Bitcoin", type: "Crypto", investi: 500, valeur: 455 },
     ],
+    positions: [
+      { id: uid(), ticker: "CW8.PA", nom: "Amundi MSCI World", env: "PEA", qte: 4, pru: 455, devisePru: "EUR", prixManuel: 0 },
+      { id: uid(), ticker: "AAPL", nom: "Apple", env: "CTO", qte: 6, pru: 168.4, devisePru: "EUR", prixManuel: 0 },
+      { id: uid(), ticker: "NVDA", nom: "Nvidia", env: "CTO", qte: 10, pru: 118, devisePru: "USD", prixManuel: 0 },
+    ],
+    fisc: { PEA: 17.2, CTO: 30 },
   };
 }
 function blank() {
-  return { example: false, accounts: [], revenus: [], charges: [], budget: { mensuel: 0, depense: 0 }, objectifs: [], placements: [] };
+  return { example: false, accounts: [], revenus: [], charges: [], budget: { mensuel: 0, depense: 0 }, objectifs: [], placements: [], positions: [], fisc: { PEA: 17.2, CTO: 30 } };
 }
 function load() {
   try { const raw = localStorage.getItem(KEY); if (raw) return Object.assign(blank(), JSON.parse(raw)); } catch (e) {}
@@ -246,6 +252,57 @@ let S = load();
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
 
 let ui = { tab: "home", flux: "charges" };
+
+/* ---------- Cours de bourse ----------
+   prices.json est régénéré par une GitHub Action (cours Yahoo Finance + taux de change).
+   Format : { updated, fx: { USD: 1.08 }, quotes: { "AAPL": { price, currency, name, prev } } } */
+let Q = { updated: null, fx: {}, quotes: {}, state: "idle" };
+async function loadPrices(manual) {
+  Q.state = "loading"; if (manual) render();
+  try {
+    const r = await fetch(`prices.json?t=${Date.now()}`, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    Q = Object.assign({ fx: {}, quotes: {} }, await r.json(), { state: "ok" });
+    try { localStorage.setItem(KEY + ":prices", JSON.stringify(Q)); } catch (e) {}
+  } catch (e) {
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem(KEY + ":prices")); } catch (err) {}
+    Q = cached ? Object.assign(cached, { state: "cache" }) : Object.assign(Q, { state: "off" });
+  }
+  render();
+  if (manual) toast(Q.state === "ok" ? "Cours actualisés" : "Cours indisponibles pour l'instant");
+}
+// Convertit un montant d'une devise vers l'euro avec le taux du fichier de cours.
+function toEUR(v, cur) {
+  if (!cur || cur === "EUR") return v;
+  if (cur === "GBp") return Q.fx.GBP ? v / 100 / Q.fx.GBP : null;
+  return Q.fx[cur] ? v / Q.fx[cur] : null;
+}
+function posCalc(p) {
+  const q = Q.quotes[(p.ticker || "").toUpperCase()];
+  let prix = null, src = "manuel", jour = null;
+  if (q && q.price) {
+    prix = toEUR(q.price, q.currency); src = "auto";
+    if (q.prev) jour = (q.price / q.prev - 1) * 100;
+  }
+  if (p.prixManuel > 0) { prix = p.prixManuel; src = "manuel"; }
+  const pruEUR = p.devisePru === "USD" ? toEUR(p.pru, "USD") : p.pru;
+  const investi = pruEUR == null ? null : p.qte * pruEUR;
+  const valeur = prix == null ? null : p.qte * prix;
+  const pv = valeur == null || investi == null ? null : valeur - investi;
+  return { q, prix, src, jour, investi, valeur, pv, pc: pv != null && investi ? (pv / investi) * 100 : null };
+}
+function bourse() {
+  const rows = S.positions.map((p) => ({ p, c: posCalc(p) }));
+  const envs = ["PEA", "CTO"].map((env) => {
+    const r = rows.filter((x) => (x.p.env || "CTO") === env && x.c.pv != null);
+    const pv = sum(r, (x) => x.c.pv);
+    const taux = Number((S.fisc || {})[env]) || 0;
+    return { env, n: rows.filter((x) => (x.p.env || "CTO") === env).length, valeur: sum(r, (x) => x.c.valeur), investi: sum(r, (x) => x.c.investi), pv, taux, impot: Math.max(0, pv) * taux / 100 };
+  });
+  const valeur = sum(envs, (e) => e.valeur), investi = sum(envs, (e) => e.investi), pv = sum(envs, (e) => e.pv), impot = sum(envs, (e) => e.impot);
+  return { rows, envs, valeur, investi, pv, impot, manquants: rows.filter((x) => x.c.valeur == null).length };
+}
 try { const t = localStorage.getItem(KEY + ":tab"); if (t) ui.tab = t; } catch (e) {}
 
 /* ---------- Format ---------- */
@@ -476,18 +533,45 @@ function viewAccounts(R) {
 function viewSavings(R) {
   const inv = sum(S.placements, (p) => p.investi), val = sum(S.placements, (p) => p.valeur);
   const perf = val - inv;
+  const B = bourse();
+  const pct = (n) => (n > 0 ? "+" : "") + n.toFixed(2).replace(".", ",") + " %";
+  const maj = Q.updated ? new Date(Q.updated).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+  const coursInfo = Q.state === "loading" ? "Actualisation…" : maj ? `Cours du ${maj}${Q.state === "cache" ? " (hors ligne)" : ""}` : "Cours automatiques indisponibles ici, saisis-les à la main";
   return `${header("Épargne & placements")}
   ${exampleBanner()}
   <section class="card">
     <p class="label">Patrimoine total</p>
-    <p class="big num">${money(R.cumul + val)}</p>
+    <p class="big num">${money(R.cumul + val + B.valeur)}</p>
     <div class="hero-sub num">
       <div><span>Comptes</span><b>${money(R.cumul, 1)}</b></div>
-      <div><span>Placements</span><b>${money(val, 1)}</b></div>
-      <div><span>Plus-value</span><b class="${perf < 0 ? "neg" : "pos"}">${signed(Math.round(perf))}</b></div>
+      <div><span>Bourse</span><b>${money(B.valeur, 1)}</b></div>
+      <div><span>Autres placements</span><b>${money(val, 1)}</b></div>
     </div>
     <p class="label" style="font-size:13px;margin-top:14px">Capacité d'épargne estimée ce mois : <b style="color:var(--ink)">${money(Math.max(0, R.finTotal), 1)}</b></p>
   </section>
+
+  <div class="section-h"><h2>Bourse · PEA & actions</h2><button data-add="pos">Ajouter</button></div>
+  <section class="card">
+    <p class="label">${B.pv >= 0 ? "Plus-value latente" : "Moins-value latente"}</p>
+    <p class="big num ${B.pv < 0 ? "neg" : "pos"}">${signed(B.pv)}</p>
+    <span class="delta ${B.pv < 0 ? "neg" : "pos"}">${B.investi ? pct((B.pv / B.investi) * 100) : ""} sur ${money(B.investi, 1)} investis</span>
+    <div class="hero-sub num">
+      ${B.envs.map((e) => `<div><span>${e.env} · ${e.n} ligne${e.n > 1 ? "s" : ""}</span><b>${money(e.valeur, 1)}</b><span class="${e.pv < 0 ? "neg" : "pos"}" style="font-size:13px">${signed(Math.round(e.pv))}</span></div>`).join("")}
+      <div><span>Impôt si tu vends tout</span><b class="neg">−${money(B.impot, 1)}</b><span style="font-size:13px">net ${signed(Math.round(B.pv - B.impot))}</span></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap">
+      <span class="label" style="font-size:12px">${coursInfo}${Q.fx.USD ? ` · 1 € = ${Q.fx.USD.toFixed(4).replace(".", ",")} $` : ""}</span>
+      <button class="chip" data-act="prices" style="padding:7px 12px">Actualiser</button>
+    </div>
+    ${B.manquants ? `<p class="label warn" style="font-size:13px;margin-top:8px">${B.manquants} ligne${B.manquants > 1 ? "s" : ""} sans cours : touche-la pour saisir le cours à la main.</p>` : ""}
+  </section>
+  <section class="card"><div class="list">${B.rows.length ? B.rows.map(({ p, c }) => `
+    <div class="row" role="button" tabindex="0" data-edit="pos" data-id="${p.id}">
+      <span class="ico" style="font-size:${(p.ticker || "").length > 4 ? 10 : 12}px">${esc((p.ticker || initials(p.nom)).split(".")[0].slice(0, 5))}</span>
+      <span class="t"><b>${esc(p.nom || p.ticker)}</b><span>${esc(p.env || "CTO")} · ${String(p.qte).replace(".", ",")} × ${c.prix != null ? money(c.prix) : "?"}${c.src === "manuel" && c.prix != null ? " (manuel)" : ""}${c.jour != null ? ` · <span class="${c.jour < 0 ? "neg" : "pos"}">${pct(c.jour)} auj.</span>` : ""}</span></span>
+      <span class="v num">${c.valeur != null ? money(c.valeur) : "—"}<small class="${(c.pv || 0) < 0 ? "neg" : "pos"}">${c.pv != null ? `${signed(Math.round(c.pv * 100) / 100)} · ${pct(c.pc || 0)}` : "cours manquant"}</small></span>
+    </div>`).join("") : `<p class="empty">Ajoute tes actions et ETF : symbole, quantité et prix d'achat.</p>`}</div></section>
+
   <div class="section-h"><h2>Objectifs</h2><button data-add="goal">Ajouter</button></div>
   <section class="card"><div class="list">${S.objectifs.length ? S.objectifs.map((g) => {
     const p = g.cible ? Math.min(100, (g.actuel / g.cible) * 100) : 0;
@@ -498,14 +582,15 @@ function viewSavings(R) {
       <div class="progress"><span style="width:${p}%"></span></div></span>
       <span class="v num">${money(g.actuel, 1)}<small>sur ${money(g.cible, 1)}</small></span></div>`;
   }).join("") : `<p class="empty">Aucun objectif d'épargne.</p>`}</div></section>
-  <div class="section-h"><h2>Placements</h2><button data-add="inv">Ajouter</button></div>
+  <div class="section-h"><h2>Autres placements</h2><button data-add="inv">Ajouter</button></div>
   <section class="card"><div class="list">${S.placements.length ? S.placements.map((p) => {
     const d = p.valeur - p.investi, pc = p.investi ? (d / p.investi) * 100 : 0;
     return `<div class="row" role="button" tabindex="0" data-edit="inv" data-id="${p.id}">
       <span class="ico">${esc(initials(p.nom))}</span>
       <span class="t"><b>${esc(p.nom)}</b><span>${esc(p.type)} · investi ${money(p.investi, 1)}</span></span>
       <span class="v num">${money(p.valeur)}<small class="${d < 0 ? "neg" : "pos"}">${signed(Math.round(d))} · ${pc.toFixed(1).replace(".", ",")} %</small></span></div>`;
-  }).join("") : `<p class="empty">Aucun placement.</p>`}</div></section>`;
+  }).join("") : `<p class="empty">Assurance-vie, crypto… avec la valeur à la main.</p>`}</div></section>
+  <p class="label" style="font-size:12px;padding:0 4px">Impôt estimé : ${String(S.fisc.PEA).replace(".", ",")} % de prélèvements sociaux sur le PEA (après 5 ans) et ${String(S.fisc.CTO).replace(".", ",")} % de flat tax sur le compte-titres. Modifiable dans le menu « … ». Ce n'est pas un conseil fiscal.</p>`;
 }
 
 function render() {
@@ -547,6 +632,19 @@ const FORMS = {
     { k: "investi", l: "Montant investi", t: "money" },
     { k: "valeur", l: "Valeur actuelle", t: "money" },
   ], def: { type: "ETF", investi: 0, valeur: 0 } },
+  pos: { list: "positions", title: "ligne d'actions", fields: [
+    { k: "ticker", l: "Symbole boursier", t: "text", ph: "AAPL, MSFT, CW8.PA…", hint: "Actions US : AAPL, TSLA… Bourse de Paris : ajoute .PA (MC.PA, CW8.PA). Cherche le symbole sur finance.yahoo.com." },
+    { k: "nom", l: "Nom (facultatif)", t: "opt", ph: "Apple" },
+    { k: "env", l: "Enveloppe", t: "select", o: ["PEA", "CTO"] },
+    { k: "qte", l: "Quantité", t: "money", ph: "10" },
+    { k: "pru", l: "Prix d'achat moyen par action (PRU)", t: "money", ph: "150,00" },
+    { k: "devisePru", l: "Devise du prix d'achat", t: "select", o: ["EUR", "USD"], hint: "Mets EUR si ton courtier affiche le PRU en euros (le plus précis)." },
+    { k: "prixManuel", l: "Cours actuel à la main, en € (facultatif)", t: "money", ph: "Laisse vide pour le cours automatique" },
+  ], def: { env: "CTO", devisePru: "EUR", qte: "", pru: "", prixManuel: "" } },
+  fisc: { title: "fiscalité", fields: [
+    { k: "PEA", l: "Taux d'impôt sur les gains du PEA (%)", t: "money", hint: "17,2 % de prélèvements sociaux après 5 ans, 30 % avant." },
+    { k: "CTO", l: "Taux d'impôt sur le compte-titres (%)", t: "money", hint: "Flat tax de 30 % par défaut." },
+  ] },
   budget: { title: "budget variable", fields: [
     { k: "mensuel", l: "Budget mensuel (courses, sorties, essence…)", t: "money" },
     { k: "depense", l: "Déjà dépensé ce mois", t: "money" },
@@ -563,7 +661,7 @@ function closeSheet() { $layer.innerHTML = ""; }
 
 function openForm(kind, id) {
   const F = FORMS[kind];
-  const cur = kind === "budget" ? S.budget : id ? S[F.list].find((x) => x.id === id) : { ...F.def };
+  const cur = kind === "budget" ? S.budget : kind === "fisc" ? (S.fisc = S.fisc || { PEA: 17.2, CTO: 30 }) : id ? S[F.list].find((x) => x.id === id) : { ...F.def };
   if (!cur) return;
   const fields = F.fields.map((f) => {
     const v = cur[f.k];
@@ -572,11 +670,12 @@ function openForm(kind, id) {
     let input;
     if (f.t === "select") input = `<select id="${fid}" name="${f.k}">${f.o.map((o) => `<option ${o === v ? "selected" : ""}>${o}</option>`).join("")}</select>`;
     else if (f.t === "day") input = `<input id="${fid}" name="${f.k}" type="number" inputmode="numeric" min="1" max="31" required value="${esc(v)}">`;
-    else if (f.t === "money") input = `<input id="${fid}" name="${f.k}" type="text" inputmode="decimal" pattern="-?[0-9 ]*[.,]?[0-9]*" placeholder="${esc(f.ph || "0")}" value="${esc(fmtInput(v))}">`;
-    else input = `<input id="${fid}" name="${f.k}" type="text" required placeholder="${esc(f.ph || "")}" value="${esc(v)}" autocomplete="off">`;
+    else if (f.t === "money") input = `<input id="${fid}" name="${f.k}" type="text" inputmode="decimal" placeholder="${esc(f.ph || "0")}" value="${esc(v === 0 && f.k === "prixManuel" ? "" : fmtInput(v))}">`;
+    else if (f.t === "opt") input = `<input id="${fid}" name="${f.k}" type="text" placeholder="${esc(f.ph || "")}" value="${esc(v)}" autocomplete="off">`;
+    else input = `<input id="${fid}" name="${f.k}" type="text" required autocapitalize="${f.k === "ticker" ? "characters" : "sentences"}" placeholder="${esc(f.ph || "")}" value="${esc(v)}" autocomplete="off">`;
     return `<div class="field"><label for="${fid}">${f.l}</label>${input}${f.hint ? `<span class="hint">${f.hint}</span>` : ""}</div>`;
   }).join("");
-  const title = kind === "budget" ? "Budget variable" : `${id ? "Modifier" : kind === "ch" ? "Nouvelle" : "Nouveau"} ${F.title}`;
+  const title = kind === "budget" ? "Budget variable" : kind === "fisc" ? "Fiscalité des placements" : `${id ? "Modifier" : ["ch", "pos"].includes(kind) ? "Nouvelle" : "Nouveau"} ${F.title}`;
   openSheet(`<h3>${title}</h3><form data-form="${kind}" data-id="${id || ""}" novalidate>${fields}
     <div class="actions">${id ? `<button type="button" class="btn danger" data-del="${kind}" data-id="${id}">Supprimer</button>` : ""}<button class="btn" type="submit">Enregistrer</button></div></form>`);
 }
@@ -594,7 +693,9 @@ function submitForm(form) {
   }
   if (kind === "acc") data.decouvert = Math.abs(data.decouvert);
   if (["ch", "rev"].includes(kind)) data.montant = Math.abs(data.montant);
+  if (kind === "pos") { data.ticker = data.ticker.toUpperCase().replace(/\s/g, ""); data.qte = Math.abs(data.qte); data.pru = Math.abs(data.pru); data.prixManuel = Math.abs(data.prixManuel); }
   if (kind === "budget") Object.assign(S.budget, data);
+  else if (kind === "fisc") Object.assign(S.fisc, data);
   else if (id) Object.assign(S[F.list].find((x) => x.id === id), data);
   else S[F.list].push({ id: uid(), ...data });
   save(); closeSheet(); render(); toast("Enregistré");
@@ -604,6 +705,7 @@ function openMenu() {
   openSheet(`<h3>Réglages</h3><div class="menu">
     <button class="btn ghost" data-act="export">Copier une sauvegarde (texte)</button>
     <button class="btn ghost" data-act="import">Restaurer une sauvegarde</button>
+    <button class="btn ghost" data-act="fisc">Fiscalité des placements</button>
     <button class="btn ghost" data-act="example">Charger les données d'exemple</button>
     <button class="btn danger" data-act="wipe">Tout effacer</button>
   </div><p class="label" style="font-size:12px;margin-top:14px">Tes données restent sur cet appareil, dans ce navigateur. Fais une sauvegarde de temps en temps.</p>`);
@@ -622,14 +724,18 @@ document.querySelector("nav.tabs").addEventListener("click", (e) => {
 });
 document.getElementById("fab").addEventListener("click", () => {
   if (ui.tab === "accounts") return openForm("acc");
-  if (ui.tab === "savings") return openForm("goal");
+  if (ui.tab === "savings") return openSheet(`<h3>Ajouter</h3><div class="menu">
+    <button class="btn ghost" data-add="pos">Une action ou un ETF</button>
+    <button class="btn ghost" data-add="goal">Un objectif d'épargne</button>
+    <button class="btn ghost" data-add="inv">Un autre placement</button></div>`);
   if (ui.tab === "budget") return openForm(ui.flux === "charges" ? "ch" : "rev");
   openSheet(`<h3>Ajouter</h3><div class="menu">
     <button class="btn ghost" data-add="ch">Une charge fixe</button>
     <button class="btn ghost" data-add="rev">Un revenu</button>
     <button class="btn ghost" data-add="acc">Un compte</button>
     <button class="btn ghost" data-add="goal">Un objectif d'épargne</button>
-    <button class="btn ghost" data-add="inv">Un placement</button></div>`);
+    <button class="btn ghost" data-add="pos">Une action ou un ETF</button>
+    <button class="btn ghost" data-add="inv">Un autre placement</button></div>`);
 });
 
 function handle(e) {
@@ -660,6 +766,8 @@ function handle(e) {
   switch (d.act) {
     case "menu": return openMenu();
     case "budget": return openForm("budget");
+    case "fisc": return openForm("fisc");
+    case "prices": return loadPrices(true);
     case "start": S = blank(); save(); ui.tab = "accounts"; render(); return openForm("acc");
     case "example": S = example(); save(); closeSheet(); render(); return toast("Exemple chargé");
     case "wipe":
@@ -702,6 +810,7 @@ document.addEventListener("submit", (e) => {
 });
 
 render();
+loadPrices();
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>
 </body>
