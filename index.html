@@ -256,11 +256,14 @@ let ui = { tab: "home", flux: "charges" };
 /* ---------- Cours de bourse ----------
    prices.json est régénéré par une GitHub Action (cours Yahoo Finance + taux de change).
    Format : { updated, fx: { USD: 1.08 }, quotes: { "AAPL": { price, currency, name, prev } } } */
+const PRICES_URL = "https://raw.githubusercontent.com/skyfox28/banqueking-/gh-pages/prices.json";
 let Q = { updated: null, fx: {}, quotes: {}, state: "idle" };
 async function loadPrices(manual) {
   Q.state = "loading"; if (manual) render();
   try {
-    const r = await fetch(`prices.json?t=${Date.now()}`, { cache: "no-store" });
+    // prices.json à côté de l'app, sinon celui de la branche gh-pages (mise à jour par la GitHub Action)
+    let r = await fetch(`prices.json?t=${Date.now()}`, { cache: "no-store" }).catch(() => null);
+    if (!r || !r.ok) r = await fetch(`${PRICES_URL}?t=${Date.now()}`, { cache: "no-store" });
     if (!r.ok) throw new Error(r.status);
     Q = Object.assign({ fx: {}, quotes: {} }, await r.json(), { state: "ok" });
     try { localStorage.setItem(KEY + ":prices", JSON.stringify(Q)); } catch (e) {}
