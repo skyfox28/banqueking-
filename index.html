@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BanqueKing</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#2a1858">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="BanqueKing">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout : une seule colonne façon app mobile, cartes vitrées sur fond violet nuit, barre d'onglets en bas. */
+:root {
+  --night: #1b1240;        /* fond profond */
+  --dusk: #3a1f73;         /* haut du dégradé */
+  --glass: rgba(255,255,255,.075);
+  --glass-hi: rgba(255,255,255,.12);
+  --line: rgba(255,255,255,.10);
+  --ink: #f6f3ff;
+  --mute: #b4abd3;
+  --faint: #8077a6;
+  --plus: #5cc59a;         /* entrées */
+  --minus: #ef6470;        /* sorties, dépassement */
+  --warn: #f2b45a;         /* découvert autorisé */
+  --accent: #8f6bff;       /* actions */
+  --sheet: #241a4d;
+  --font: "Onest", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --r-card: 26px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 15px;
+  color: var(--ink);
+  background: var(--night);
+  background-image: radial-gradient(120% 60% at 50% 0%, var(--dusk) 0%, var(--night) 70%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+.app {
+  max-width: 560px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: calc(env(safe-area-inset-top, 0px) + 12px) calc(env(safe-area-inset-bottom, 0px) + 104px);
+  display: flex; flex-direction: column; gap: 14px;
+}
+header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 6px; }
+header.top h1 { font-size: 19px; font-weight: 600; margin: 0; letter-spacing: .01em; }
+.pill {
+  border: 0; border-radius: 999px; background: var(--glass-hi);
+  padding: 10px 16px; font-weight: 500; display: inline-flex; align-items: center; gap: 8px;
+}
+.round { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--glass-hi); display: grid; place-items: center; }
+.round svg { width: 22px; height: 22px; }
+.card {
+  background: var(--glass); border: 1px solid var(--line); border-radius: var(--r-card);
+  padding: 20px; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  min-width: 0;
+}
+.label { color: var(--mute); font-size: 15px; margin: 0; }
+.big { font-size: 40px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; margin: 4px 0 0; }
+.mid { font-size: 26px; font-weight: 700; letter-spacing: -.01em; margin: 2px 0 0; }
+.delta { font-weight: 500; font-size: 15px; display: inline-flex; align-items: center; gap: 6px; }
+.pos { color: var(--plus); } .neg { color: var(--minus); } .warn { color: var(--warn); }
+.status {
+  display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 6px 12px;
+  font-size: 13px; font-weight: 600; background: var(--glass-hi);
+}
+.status i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.hero-sub { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin-top: 16px; }
+.hero-sub div { min-width: 0; }
+.hero-sub span { display: block; color: var(--faint); font-size: 12px; }
+.hero-sub b { font-weight: 600; font-size: 15px; }
+.chart { width: 100%; height: auto; display: block; margin-top: 14px; }
+.chart text { fill: var(--faint); font-family: var(--font); font-size: 10px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+.tile { display: flex; flex-direction: column; min-height: 190px; }
+.tile .foot { margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+.tile small { display: block; font-size: 13px; }
+.bars { display: flex; gap: 6px; align-items: flex-end; height: 90px; }
+.bars span { width: 22px; border-radius: 7px 7px 3px 3px; }
+.spikes { display: flex; align-items: flex-end; gap: 3px; height: 70px; margin-top: 14px; }
+.spikes span { flex: 1; background: var(--line); border-radius: 2px; min-height: 2px; }
+.spikes span.on { background: var(--ink); }
+.section-h { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 4px -4px; }
+.section-h h2 { font-size: 17px; margin: 0; font-weight: 600; }
+.section-h button { background: none; border: 0; color: var(--accent); font-weight: 600; padding: 6px 0; }
+.list { display: flex; flex-direction: column; }
+.row {
+  display: grid; grid-template-columns: 40px minmax(0,1fr) auto; gap: 12px; align-items: center;
+  padding: 12px 0; border: 0; background: none; text-align: left; width: 100%;
+  border-bottom: 1px solid var(--line);
+}
+.row:last-child { border-bottom: 0; }
+.row .ico { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--glass-hi); font-weight: 700; font-size: 14px; }
+.row .t { min-width: 0; }
+.row .t b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .t span { color: var(--faint); font-size: 13px; }
+.row .v { text-align: right; font-weight: 600; }
+.row .v small { display: block; font-weight: 500; font-size: 12px; color: var(--faint); }
+.chip { border: 0; border-radius: 999px; padding: 3px 9px; font-size: 12px; font-weight: 600; background: var(--glass-hi); color: var(--mute); margin-top: 3px; }
+.chip.done { color: var(--plus); }
+.empty { color: var(--faint); padding: 14px 0 4px; margin: 0; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--glass); border-radius: 999px; padding: 4px; gap: 4px; }
+.seg button { border: 0; background: none; border-radius: 999px; padding: 10px; font-weight: 600; color: var(--mute); }
+.seg button[aria-pressed="true"] { background: var(--glass-hi); color: var(--ink); }
+.progress { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; margin-top: 10px; }
+.progress span { display: block; height: 100%; border-radius: inherit; background: var(--plus); }
+.banner {
+  display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  background: rgba(242,180,90,.12); border: 1px solid rgba(242,180,90,.35); color: var(--warn);
+  border-radius: 18px; padding: 12px 14px; font-size: 14px;
+}
+.banner button { border: 0; border-radius: 999px; background: var(--warn); color: var(--night); font-weight: 700; padding: 8px 14px; }
+nav.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  padding: 8px max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 8px) max(16px, env(safe-area-inset-left, 0px));
+  background: rgba(27,18,64,.82); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--line);
+}
+nav.tabs .in { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+nav.tabs button { border: 0; background: none; color: var(--faint); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0; font-size: 11px; font-weight: 600; }
+nav.tabs button svg { width: 24px; height: 24px; }
+nav.tabs button[aria-current="page"] { color: var(--ink); }
+.fab {
+  position: fixed; z-index: 21; right: max(18px, calc(env(safe-area-inset-right, 0px) + 18px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 86px);
+  width: 56px; height: 56px; border-radius: 50%; border: 0; background: var(--accent); color: #fff;
+  box-shadow: 0 10px 30px rgba(143,107,255,.45); display: grid; place-items: center;
+}
+.fab svg { width: 26px; height: 26px; }
+/* Feuille modale */
+.scrim { position: fixed; inset: 0; z-index: 30; background: rgba(8,4,24,.6); display: flex; align-items: flex-end; justify-content: center; }
+.sheet {
+  width: 100%; max-width: 560px; max-height: 92%; overflow: auto; background: var(--sheet);
+  border-radius: 28px 28px 0 0; border: 1px solid var(--line); border-bottom: 0;
+  padding: 10px max(20px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 20px) max(20px, env(safe-area-inset-left, 0px));
+  animation: up .22s ease-out;
+}
+@keyframes up { from { transform: translateY(30px); opacity: .6; } }
+@media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
+.grab { width: 40px; height: 5px; border-radius: 9px; background: var(--line); margin: 0 auto 14px; }
+.sheet h3 { font-size: 20px; margin: 0 0 16px; }
+.sheet form { display: flex; flex-direction: column; gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { color: var(--mute); font-size: 13px; font-weight: 500; }
+.field input, .field select {
+  background: var(--glass); border: 1px solid var(--line); border-radius: 14px; padding: 13px 14px; font-size: 16px; width: 100%;
+}
+.field select option { background: var(--sheet); }
+.field .hint { color: var(--faint); font-size: 12px; }
+.check { display: flex; gap: 12px; align-items: center; color: var(--mute); font-size: 14px; }
+.check input { width: 22px; height: 22px; accent-color: var(--accent); }
+.actions { display: flex; gap: 10px; margin-top: 6px; }
+.btn { flex: 1; border: 0; border-radius: 16px; padding: 14px; font-weight: 700; background: var(--accent); color: #fff; }
+.btn.ghost { background: var(--glass-hi); color: var(--ink); }
+.btn.danger { background: rgba(239,100,112,.16); color: var(--minus); }
+.menu { display: flex; flex-direction: column; gap: 10px; }
+.menu .btn { text-align: left; }
+.toast {
+  position: fixed; z-index: 40; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
+  background: var(--ink); color: var(--night); padding: 10px 16px; border-radius: 999px; font-weight: 600; font-size: 14px;
+}
+@media (max-width: 380px) { .big { font-size: 34px; } .grid2 { gap: 10px; } .card { padding: 16px; } }
+</style>
+</head>
+<body>
+<main class="app" id="app"></main>
+<button class="fab" id="fab" aria-label="Ajouter">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+<nav class="tabs" aria-label="Navigation">
+  <div class="in">
+    <button data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/></svg>Accueil</button>
+    <button data-tab="budget"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Budget</button>
+    <button data-tab="accounts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18M7 15h4"/></svg>Comptes</button>
+    <button data-tab="savings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 9.5 12l3.5 3.5L20 8"/><path d="M15 8h5v5"/></svg>Épargne</button>
+  </div>
+</nav>
+<div id="layer"></div>
+
+<script>
+"use strict";
+/* ---------- Données ---------- */
+const KEY = "banqueking:v1";
+const CATS = ["Logement", "Énergie", "Transport", "Assurance", "Abonnement", "Crédit", "Épargne", "Santé", "Impôts", "Autre"];
+const ACC_TYPES = ["Courant", "Épargne", "Investissement"];
+const INV_TYPES = ["ETF", "Actions", "Assurance-vie", "PEA", "Crypto", "Autre"];
+
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+function example() {
+  return {
+    example: true,
+    accounts: [
+      { id: uid(), nom: "Compte courant", type: "Courant", solde: 412.35, decouvert: 300, inclus: true },
+      { id: uid(), nom: "Revolut", type: "Courant", solde: 128.6, decouvert: 0, inclus: true },
+      { id: uid(), nom: "Livret A", type: "Épargne", solde: 3500, decouvert: 0, inclus: false },
+    ],
+    revenus: [
+      { id: uid(), nom: "Salaire", montant: 2450, jour: 30 },
+      { id: uid(), nom: "Prime transport", montant: 45, jour: 30 },
+    ],
+    charges: [
+      { id: uid(), nom: "Loyer", montant: 780, jour: 5, cat: "Logement" },
+      { id: uid(), nom: "Crédit auto", montant: 245, jour: 22, cat: "Crédit" },
+      { id: uid(), nom: "Assurance habitation", montant: 18.5, jour: 23, cat: "Assurance" },
+      { id: uid(), nom: "Électricité", montant: 89, jour: 24, cat: "Énergie" },
+      { id: uid(), nom: "Box internet", montant: 29.99, jour: 26, cat: "Abonnement" },
+      { id: uid(), nom: "Forfait mobile", montant: 15.99, jour: 26, cat: "Abonnement" },
+      { id: uid(), nom: "Salle de sport", montant: 34.9, jour: 28, cat: "Abonnement" },
+      { id: uid(), nom: "Virement Livret A", montant: 150, jour: 29, cat: "Épargne" },
+    ],
+    budget: { mensuel: 450, depense: 260 },
+    objectifs: [
+      { id: uid(), nom: "Fonds d'urgence", cible: 6000, actuel: 3500, mensuel: 150 },
+      { id: uid(), nom: "Vacances été", cible: 1500, actuel: 420, mensuel: 80 },
+    ],
+    placements: [
+      { id: uid(), nom: "ETF MSCI World", type: "ETF", investi: 2400, valeur: 2712 },
+      { id: uid(), nom: "Bitcoin", type: "Crypto", investi: 500, valeur: 455 },
+    ],
+  };
+}
+function blank() {
+  return { example: false, accounts: [], revenus: [], charges: [], budget: { mensuel: 0, depense: 0 }, objectifs: [], placements: [] };
+}
+function load() {
+  try { const raw = localStorage.getItem(KEY); if (raw) return Object.assign(blank(), JSON.parse(raw)); } catch (e) {}
+  return example();
+}
+let S = load();
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+
+let ui = { tab: "home", flux: "charges" };
+try { const t = localStorage.getItem(KEY + ":tab"); if (t) ui.tab = t; } catch (e) {}
+
+/* ---------- Format ---------- */
+const eur = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
+const eur0 = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+const money = (n, round) => (round ? eur0 : eur).format(n || 0);
+const signed = (n) => (n > 0 ? "+" : "") + money(n);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+const sum = (arr, f) => arr.reduce((a, x) => a + (Number(f(x)) || 0), 0);
+const initials = (s) => (s || "?").trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+
+/* ---------- Calculs ---------- */
+function ctx() {
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  return { now, y, m, today: now.getDate(), dim: new Date(y, m + 1, 0).getDate(), mk: `${y}-${m + 1}` };
+}
+const dayOf = (it, c) => Math.min(Math.max(1, Number(it.jour) || 1), c.dim);
+// Un mouvement est « passé » si sa date est atteinte, sauf si l'utilisateur a forcé l'état pour ce mois.
+function isDone(it, c) {
+  if (it.ov && it.ov.m === c.mk) return it.ov.done;
+  return dayOf(it, c) <= c.today;
+}
+
+function compute() {
+  const c = ctx();
+  const inc = S.accounts.filter((a) => a.inclus);
+  const cumul = sum(S.accounts, (a) => a.solde);
+  const dispo = sum(inc, (a) => a.solde);
+  const autorise = sum(inc, (a) => a.decouvert);
+  const revAVenir = S.revenus.filter((r) => !isDone(r, c));
+  const chAVenir = S.charges.filter((r) => !isDone(r, c));
+  const varReste = Math.max(0, (Number(S.budget.mensuel) || 0) - (Number(S.budget.depense) || 0));
+  const daysLeft = c.dim - c.today;
+
+  // Projection jour par jour, d'aujourd'hui à la fin du mois
+  const pts = [{ d: c.today, fixe: dispo, total: dispo }];
+  let fixe = dispo, total = dispo;
+  for (let d = c.today + 1; d <= c.dim; d++) {
+    const delta = sum(revAVenir.filter((r) => dayOf(r, c) === d), (r) => r.montant) - sum(chAVenir.filter((r) => dayOf(r, c) === d), (r) => r.montant);
+    fixe += delta;
+    total += delta - varReste / daysLeft;
+    pts.push({ d, fixe, total });
+  }
+  // Mouvements forcés « à venir » dont la date est passée : on les applique tout de suite
+  const lateDelta = sum(revAVenir.filter((r) => dayOf(r, c) <= c.today), (r) => r.montant) - sum(chAVenir.filter((r) => dayOf(r, c) <= c.today), (r) => r.montant);
+  if (lateDelta) pts.forEach((p) => { p.fixe += lateDelta; p.total += lateDelta; });
+  if (daysLeft === 0) pts[0].total -= varReste;
+
+  const finFixe = pts[pts.length - 1].fixe;
+  const finTotal = pts[pts.length - 1].total;
+  const low = pts.reduce((a, p) => (p.total < a.total ? p : a), pts[0]);
+  let etat = "ok";
+  if (low.total < -autorise) etat = "over";
+  else if (low.total < 0) etat = "decouvert";
+
+  return {
+    c, cumul, dispo, autorise, varReste, pts, finFixe, finTotal, low, etat,
+    revMois: sum(S.revenus, (r) => r.montant), chMois: sum(S.charges, (r) => r.montant),
+    revAVenir: sum(revAVenir, (r) => r.montant), chAVenir: sum(chAVenir, (r) => r.montant),
+    prochains: chAVenir.map((x) => ({ ...x, kind: "ch" })).concat(revAVenir.map((x) => ({ ...x, kind: "rev" }))).sort((a, b) => dayOf(a, c) - dayOf(b, c)),
+  };
+}
+
+/* ---------- Rendu ---------- */
+const $app = document.getElementById("app");
+const $layer = document.getElementById("layer");
+
+function header(title, extra = "") {
+  return `<header class="top"><h1>${title}</h1><div style="display:flex;gap:8px;align-items:center">${extra}
+    <button class="round" data-act="menu" aria-label="Réglages"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg></button></div></header>`;
+}
+function exampleBanner() {
+  return S.example ? `<div class="banner"><span>Ce sont des données d'exemple.</span><button data-act="start">Commencer avec mes chiffres</button></div>` : "";
+}
+function statusPill(R) {
+  const d = `le ${R.low.d} ${MONTHS[R.c.m]}`;
+  if (R.etat === "over") return `<span class="status neg"><i></i>Dépassement du découvert ${d} (${money(R.low.total, 1)})</span>`;
+  if (R.etat === "decouvert") return `<span class="status warn"><i></i>À découvert ${d} · ${money(R.low.total, 1)}</span>`;
+  return `<span class="status pos"><i></i>Pas de découvert prévu</span>`;
+}
+
+function chart(R) {
+  const W = 340, H = 150, padL = 4, padR = 4, padT = 14, padB = 22;
+  const pts = R.pts;
+  const vals = pts.flatMap((p) => [p.fixe, p.total]).concat([0]);
+  if (R.low.total < 0 && R.autorise) vals.push(-R.autorise);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (hi - lo < 1) { hi += 50; lo -= 50; }
+  const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+  const d0 = pts[0].d, d1 = Math.max(pts[pts.length - 1].d, d0 + 1);
+  const X = (d) => padL + ((d - d0) / (d1 - d0)) * (W - padL - padR);
+  const Y = (v) => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB);
+  const step = (key) => {
+    let s = `M${X(pts[0].d).toFixed(1)},${Y(pts[0][key]).toFixed(1)}`;
+    for (let i = 1; i < pts.length; i++) s += ` H${X(pts[i].d).toFixed(1)} V${Y(pts[i][key]).toFixed(1)}`;
+    if (pts.length === 1) s += ` H${X(d1).toFixed(1)}`;
+    return s;
+  };
+  const lineFixe = step("fixe"), lineTot = step("total");
+  const lastX = X(pts.length === 1 ? d1 : pts[pts.length - 1].d);
+  const area = `${lineFixe} V${H - padB} H${X(pts[0].d).toFixed(1)} Z`;
+  let grid = "";
+  for (let i = 1; i < 4; i++) grid += `<line x1="${padL}" x2="${W - padR}" y1="${padT + i * (H - padT - padB) / 4}" y2="${padT + i * (H - padT - padB) / 4}" stroke="var(--line)" stroke-width=".6"/>`;
+  const zero = `<line x1="${padL}" x2="${W - padR}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--mute)" stroke-width=".8" stroke-dasharray="3 4"/><text x="${W - padR}" y="${Y(0) - 4}" text-anchor="end">0 €</text>`;
+  const ovd = R.low.total < 0 && R.autorise
+    ? `<line x1="${padL}" x2="${W - padR}" y1="${Y(-R.autorise)}" y2="${Y(-R.autorise)}" stroke="var(--minus)" stroke-width=".8" stroke-dasharray="3 4"/><text x="${W - padR}" y="${Y(-R.autorise) + 12}" text-anchor="end" style="fill:var(--minus)">découvert max ${money(-R.autorise, 1)}</text>` : "";
+  const lowDot = R.low.total < 0 ? `<circle cx="${X(R.low.d)}" cy="${Y(R.low.total)}" r="4" fill="${R.etat === "over" ? "var(--minus)" : "var(--warn)"}"/>` : "";
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Projection du solde jusqu'à la fin du mois">
+    <defs><linearGradient id="gA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".18"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
+    ${grid}<path d="${area}" fill="url(#gA)"/>${zero}${ovd}
+    <path d="${lineTot}" fill="none" stroke="var(--faint)" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="${lineFixe}" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/>
+    ${lowDot}
+    <circle cx="${X(pts[0].d)}" cy="${Y(pts[0].fixe)}" r="5" fill="var(--ink)"/><circle cx="${X(pts[0].d)}" cy="${Y(pts[0].fixe)}" r="9" fill="var(--ink)" fill-opacity=".2"/>
+    <circle cx="${lastX}" cy="${Y(R.finFixe)}" r="3.5" fill="var(--ink)"/>
+    <text x="${padL}" y="${H - 6}">Aujourd'hui · ${R.c.today} ${MONTHS[R.c.m].slice(0, 4)}.</text>
+    <text x="${W - padR}" y="${H - 6}" text-anchor="end">${R.c.dim} ${MONTHS[R.c.m].slice(0, 4)}.</text>
+  </svg>`;
+}
+
+function rowItem(it, R, kind) {
+  const c = R.c, done = isDone(it, c), d = dayOf(it, c);
+  const when = done ? "Passé" : d - c.today <= 0 ? "Aujourd'hui" : d - c.today === 1 ? "Demain" : `Dans ${d - c.today} j`;
+  const amt = kind === "rev" ? `<span class="pos">+${money(it.montant)}</span>` : `−${money(it.montant)}`;
+  const sub = kind === "rev" ? `le ${d} du mois` : `${esc(it.cat || "Autre")} · le ${d}`;
+  return `<div class="row" role="button" tabindex="0" data-edit="${kind}" data-id="${it.id}">
+    <span class="ico">${esc(initials(it.nom))}</span>
+    <span class="t"><b>${esc(it.nom)}</b><span>${sub}</span></span>
+    <span class="v num">${amt}<br><button class="chip ${done ? "done" : ""}" data-toggle="${kind}" data-id="${it.id}" aria-label="Changer l'état">${done ? "✓ " : ""}${when}</button></span>
+  </div>`;
+}
+
+function viewHome(R) {
+  const c = R.c;
+  const finCls = R.finFixe < -R.autorise ? "neg" : R.finFixe < 0 ? "warn" : "";
+  const spikes = Array.from({ length: c.dim }, (_, i) => {
+    const v = sum(S.revenus.filter((r) => dayOf(r, c) === i + 1), (r) => r.montant);
+    return v;
+  });
+  const maxSpike = Math.max(1, ...spikes);
+  const net = R.revMois - R.chMois;
+  const maxBar = Math.max(1, R.revMois, R.chMois);
+  const next = R.prochains.slice(0, 5);
+  return `${header("BanqueKing", `<span class="pill">${MONTHS[c.m][0].toUpperCase() + MONTHS[c.m].slice(1)}</span>`)}
+  ${exampleBanner()}
+  <section class="card">
+    <p class="label">Reste à la fin du mois</p>
+    <p class="big num ${finCls}">${money(R.finFixe)}</p>
+    <div style="margin-top:10px">${statusPill(R)}</div>
+    ${chart(R)}
+    <div class="hero-sub num">
+      <div><span>Solde dispo</span><b>${money(R.dispo, 1)}</b></div>
+      <div><span>Charges à venir</span><b class="neg">−${money(R.chAVenir, 1)}</b></div>
+      <div><span>Revenus à venir</span><b class="pos">+${money(R.revAVenir, 1)}</b></div>
+    </div>
+    <div class="hero-sub num" style="margin-top:10px">
+      <div><span>Après budget variable</span><b class="${R.finTotal < 0 ? "neg" : ""}">${money(R.finTotal, 1)}</b></div>
+      <div><span>Avec découvert</span><b>${money(R.finFixe + R.autorise, 1)}</b></div>
+      <div><span>Jours restants</span><b>${c.dim - c.today}</b></div>
+    </div>
+  </section>
+  <section class="card" data-go="accounts" role="button" tabindex="0">
+    <p class="label">Solde cumulé · ${S.accounts.length} compte${S.accounts.length > 1 ? "s" : ""}</p>
+    <p class="mid num ${R.cumul < 0 ? "neg" : ""}">${money(R.cumul)}</p>
+  </section>
+  <div class="grid2">
+    <section class="card tile">
+      <p class="label">Entrées d'argent</p>
+      <p class="mid num">${money(R.revMois, 1)}</p>
+      <div class="spikes">${spikes.map((v, i) => `<span class="${v ? "on" : ""}" style="height:${v ? Math.max(8, (v / maxSpike) * 100) : 4}%" title="${i + 1}"></span>`).join("")}</div>
+    </section>
+    <section class="card tile">
+      <p class="label">Opérations nettes</p>
+      <p class="mid num ${net < 0 ? "neg" : ""}">${signed(Math.round(net))}</p>
+      <div class="foot">
+        <div class="num"><small class="pos">⊕ ${money(R.revMois, 1)}</small><small class="neg">⊖ ${money(R.chMois, 1)}</small></div>
+        <div class="bars"><span style="height:${(R.revMois / maxBar) * 100}%;background:var(--plus)"></span><span style="height:${(R.chMois / maxBar) * 100}%;background:var(--minus)"></span></div>
+      </div>
+    </section>
+  </div>
+  <div class="section-h"><h2>Prochains mouvements</h2><button data-go="budget">Tout voir</button></div>
+  <section class="card"><div class="list">${next.length ? next.map((it) => rowItem(it, R, it.kind)).join("") : `<p class="empty">Plus rien de prévu ce mois-ci.</p>`}</div></section>`;
+}
+
+function viewBudget(R) {
+  const isCh = ui.flux === "charges";
+  const items = (isCh ? S.charges : S.revenus).slice().sort((a, b) => dayOf(a, R.c) - dayOf(b, R.c));
+  const b = S.budget, pct = b.mensuel ? Math.min(100, (b.depense / b.mensuel) * 100) : 0;
+  const byCat = CATS.map((cat) => ({ cat, v: sum(S.charges.filter((x) => (x.cat || "Autre") === cat), (x) => x.montant) })).filter((x) => x.v).sort((a, b) => b.v - a.v);
+  return `${header("Budget")}
+  ${exampleBanner()}
+  <section class="card" data-act="budget" role="button" tabindex="0">
+    <p class="label">Budget variable du mois</p>
+    <p class="mid num">${money(R.varReste)} <span class="label" style="display:inline;font-size:15px;font-weight:500">restants sur ${money(b.mensuel, 1)}</span></p>
+    <div class="progress"><span style="width:${pct}%;background:${pct > 90 ? "var(--minus)" : pct > 70 ? "var(--warn)" : "var(--plus)"}"></span></div>
+    <p class="label" style="font-size:13px;margin-top:8px">Déjà dépensé : ${money(b.depense)} · touche pour mettre à jour</p>
+  </section>
+  <div class="seg" role="group">
+    <button data-flux="charges" aria-pressed="${isCh}">Charges fixes · ${money(R.chMois, 1)}</button>
+    <button data-flux="revenus" aria-pressed="${!isCh}">Revenus · ${money(R.revMois, 1)}</button>
+  </div>
+  <section class="card"><div class="list">${items.length ? items.map((it) => rowItem(it, R, isCh ? "ch" : "rev")).join("") : `<p class="empty">Aucun${isCh ? "e charge fixe" : " revenu"}. Touche + pour en ajouter.</p>`}</div></section>
+  ${isCh && byCat.length ? `<div class="section-h"><h2>Par catégorie</h2></div><section class="card"><div class="list">${byCat.map((x) => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto"><span class="t"><b>${x.cat}</b><div class="progress" style="margin-top:6px"><span style="width:${(x.v / R.chMois) * 100}%;background:var(--accent)"></span></div></span><span class="v num">${money(x.v)}<small>${Math.round((x.v / R.chMois) * 100)} %</small></span></div>`).join("")}</div></section>` : ""}`;
+}
+
+function viewAccounts(R) {
+  return `${header("Comptes")}
+  ${exampleBanner()}
+  <section class="card">
+    <p class="label">Solde cumulé de tous les comptes</p>
+    <p class="big num ${R.cumul < 0 ? "neg" : ""}">${money(R.cumul)}</p>
+    <div class="hero-sub num">
+      <div><span>Comptés dans le mois</span><b>${money(R.dispo, 1)}</b></div>
+      <div><span>Découvert autorisé</span><b class="warn">${money(R.autorise, 1)}</b></div>
+      <div><span>Mis de côté</span><b>${money(R.cumul - R.dispo, 1)}</b></div>
+    </div>
+  </section>
+  <section class="card"><div class="list">${S.accounts.length ? S.accounts.map((a) => `
+    <div class="row" role="button" tabindex="0" data-edit="acc" data-id="${a.id}">
+      <span class="ico">${esc(initials(a.nom))}</span>
+      <span class="t"><b>${esc(a.nom)}</b><span>${esc(a.type)}${a.decouvert ? ` · découvert ${money(a.decouvert, 1)}` : ""}${a.inclus ? "" : " · hors calcul du mois"}</span></span>
+      <span class="v num ${a.solde < 0 ? (a.solde < -a.decouvert ? "neg" : "warn") : ""}">${money(a.solde)}</span>
+    </div>`).join("") : `<p class="empty">Aucun compte. Touche + pour ajouter ton premier compte.</p>`}</div></section>`;
+}
+
+function viewSavings(R) {
+  const inv = sum(S.placements, (p) => p.investi), val = sum(S.placements, (p) => p.valeur);
+  const perf = val - inv;
+  return `${header("Épargne & placements")}
+  ${exampleBanner()}
+  <section class="card">
+    <p class="label">Patrimoine total</p>
+    <p class="big num">${money(R.cumul + val)}</p>
+    <div class="hero-sub num">
+      <div><span>Comptes</span><b>${money(R.cumul, 1)}</b></div>
+      <div><span>Placements</span><b>${money(val, 1)}</b></div>
+      <div><span>Plus-value</span><b class="${perf < 0 ? "neg" : "pos"}">${signed(Math.round(perf))}</b></div>
+    </div>
+    <p class="label" style="font-size:13px;margin-top:14px">Capacité d'épargne estimée ce mois : <b style="color:var(--ink)">${money(Math.max(0, R.finTotal), 1)}</b></p>
+  </section>
+  <div class="section-h"><h2>Objectifs</h2><button data-add="goal">Ajouter</button></div>
+  <section class="card"><div class="list">${S.objectifs.length ? S.objectifs.map((g) => {
+    const p = g.cible ? Math.min(100, (g.actuel / g.cible) * 100) : 0;
+    const rest = Math.max(0, g.cible - g.actuel);
+    const mois = g.mensuel > 0 && rest > 0 ? Math.ceil(rest / g.mensuel) : 0;
+    return `<div class="row" role="button" tabindex="0" data-edit="goal" data-id="${g.id}" style="grid-template-columns:minmax(0,1fr) auto">
+      <span class="t"><b>${esc(g.nom)}</b><span>${rest ? (mois ? `Atteint dans ${mois} mois à ${money(g.mensuel, 1)}/mois` : `Reste ${money(rest, 1)}`) : "Objectif atteint"}</span>
+      <div class="progress"><span style="width:${p}%"></span></div></span>
+      <span class="v num">${money(g.actuel, 1)}<small>sur ${money(g.cible, 1)}</small></span></div>`;
+  }).join("") : `<p class="empty">Aucun objectif d'épargne.</p>`}</div></section>
+  <div class="section-h"><h2>Placements</h2><button data-add="inv">Ajouter</button></div>
+  <section class="card"><div class="list">${S.placements.length ? S.placements.map((p) => {
+    const d = p.valeur - p.investi, pc = p.investi ? (d / p.investi) * 100 : 0;
+    return `<div class="row" role="button" tabindex="0" data-edit="inv" data-id="${p.id}">
+      <span class="ico">${esc(initials(p.nom))}</span>
+      <span class="t"><b>${esc(p.nom)}</b><span>${esc(p.type)} · investi ${money(p.investi, 1)}</span></span>
+      <span class="v num">${money(p.valeur)}<small class="${d < 0 ? "neg" : "pos"}">${signed(Math.round(d))} · ${pc.toFixed(1).replace(".", ",")} %</small></span></div>`;
+  }).join("") : `<p class="empty">Aucun placement.</p>`}</div></section>`;
+}
+
+function render() {
+  const R = compute();
+  const views = { home: viewHome, budget: viewBudget, accounts: viewAccounts, savings: viewSavings };
+  $app.innerHTML = (views[ui.tab] || viewHome)(R);
+  document.querySelectorAll("nav.tabs button").forEach((b) => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false"));
+}
+
+/* ---------- Formulaires ---------- */
+const FORMS = {
+  acc: { list: "accounts", title: "compte", fields: [
+    { k: "nom", l: "Nom du compte", t: "text", ph: "Compte courant" },
+    { k: "type", l: "Type", t: "select", o: ACC_TYPES },
+    { k: "solde", l: "Solde actuel (négatif si à découvert)", t: "money", ph: "-120,50" },
+    { k: "decouvert", l: "Découvert autorisé", t: "money", ph: "0", hint: "Montant positif. 0 si pas de découvert." },
+    { k: "inclus", l: "Compter ce compte dans le reste du mois", t: "check" },
+  ], def: { type: "Courant", solde: 0, decouvert: 0, inclus: true } },
+  ch: { list: "charges", title: "charge fixe", fields: [
+    { k: "nom", l: "Intitulé", t: "text", ph: "Loyer, EDF, Netflix…" },
+    { k: "montant", l: "Montant", t: "money", ph: "0" },
+    { k: "jour", l: "Jour de prélèvement (1 à 31)", t: "day" },
+    { k: "cat", l: "Catégorie", t: "select", o: CATS },
+  ], def: { jour: 1, cat: "Autre" } },
+  rev: { list: "revenus", title: "revenu", fields: [
+    { k: "nom", l: "Intitulé", t: "text", ph: "Salaire, CAF, loyer perçu…" },
+    { k: "montant", l: "Montant", t: "money", ph: "0" },
+    { k: "jour", l: "Jour de versement (1 à 31)", t: "day" },
+  ], def: { jour: 1 } },
+  goal: { list: "objectifs", title: "objectif", fields: [
+    { k: "nom", l: "Nom", t: "text", ph: "Apport immobilier" },
+    { k: "cible", l: "Montant visé", t: "money" },
+    { k: "actuel", l: "Déjà épargné", t: "money" },
+    { k: "mensuel", l: "Versement par mois", t: "money" },
+  ], def: { cible: 0, actuel: 0, mensuel: 0 } },
+  inv: { list: "placements", title: "placement", fields: [
+    { k: "nom", l: "Nom", t: "text", ph: "ETF S&P 500" },
+    { k: "type", l: "Type", t: "select", o: INV_TYPES },
+    { k: "investi", l: "Montant investi", t: "money" },
+    { k: "valeur", l: "Valeur actuelle", t: "money" },
+  ], def: { type: "ETF", investi: 0, valeur: 0 } },
+  budget: { title: "budget variable", fields: [
+    { k: "mensuel", l: "Budget mensuel (courses, sorties, essence…)", t: "money" },
+    { k: "depense", l: "Déjà dépensé ce mois", t: "money" },
+  ] },
+};
+const parseMoney = (v) => { const n = parseFloat(String(v).replace(/\s/g, "").replace(",", ".")); return isFinite(n) ? n : 0; };
+const fmtInput = (v) => (v === undefined || v === null || v === "" ? "" : String(v).replace(".", ","));
+
+function openSheet(html) {
+  $layer.innerHTML = `<div class="scrim" data-close><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div></div>`;
+  const f = $layer.querySelector("input,select,button"); if (f && !matchMedia("(pointer:coarse)").matches) f.focus();
+}
+function closeSheet() { $layer.innerHTML = ""; }
+
+function openForm(kind, id) {
+  const F = FORMS[kind];
+  const cur = kind === "budget" ? S.budget : id ? S[F.list].find((x) => x.id === id) : { ...F.def };
+  if (!cur) return;
+  const fields = F.fields.map((f) => {
+    const v = cur[f.k];
+    const fid = `f-${kind}-${f.k}`;
+    if (f.t === "check") return `<label class="check" for="${fid}"><input type="checkbox" id="${fid}" name="${f.k}" ${v ? "checked" : ""}>${f.l}</label>`;
+    let input;
+    if (f.t === "select") input = `<select id="${fid}" name="${f.k}">${f.o.map((o) => `<option ${o === v ? "selected" : ""}>${o}</option>`).join("")}</select>`;
+    else if (f.t === "day") input = `<input id="${fid}" name="${f.k}" type="number" inputmode="numeric" min="1" max="31" required value="${esc(v)}">`;
+    else if (f.t === "money") input = `<input id="${fid}" name="${f.k}" type="text" inputmode="decimal" pattern="-?[0-9 ]*[.,]?[0-9]*" placeholder="${esc(f.ph || "0")}" value="${esc(fmtInput(v))}">`;
+    else input = `<input id="${fid}" name="${f.k}" type="text" required placeholder="${esc(f.ph || "")}" value="${esc(v)}" autocomplete="off">`;
+    return `<div class="field"><label for="${fid}">${f.l}</label>${input}${f.hint ? `<span class="hint">${f.hint}</span>` : ""}</div>`;
+  }).join("");
+  const title = kind === "budget" ? "Budget variable" : `${id ? "Modifier" : kind === "ch" ? "Nouvelle" : "Nouveau"} ${F.title}`;
+  openSheet(`<h3>${title}</h3><form data-form="${kind}" data-id="${id || ""}" novalidate>${fields}
+    <div class="actions">${id ? `<button type="button" class="btn danger" data-del="${kind}" data-id="${id}">Supprimer</button>` : ""}<button class="btn" type="submit">Enregistrer</button></div></form>`);
+}
+
+function submitForm(form) {
+  const kind = form.dataset.form, id = form.dataset.id, F = FORMS[kind];
+  const data = {};
+  for (const f of F.fields) {
+    const el = form.elements[f.k];
+    if (f.t === "check") data[f.k] = el.checked;
+    else if (f.t === "money") data[f.k] = parseMoney(el.value);
+    else if (f.t === "day") data[f.k] = Math.min(31, Math.max(1, parseInt(el.value, 10) || 1));
+    else data[f.k] = el.value.trim();
+    if (f.t === "text" && !data[f.k]) { el.focus(); el.style.borderColor = "var(--minus)"; return; }
+  }
+  if (kind === "acc") data.decouvert = Math.abs(data.decouvert);
+  if (["ch", "rev"].includes(kind)) data.montant = Math.abs(data.montant);
+  if (kind === "budget") Object.assign(S.budget, data);
+  else if (id) Object.assign(S[F.list].find((x) => x.id === id), data);
+  else S[F.list].push({ id: uid(), ...data });
+  save(); closeSheet(); render(); toast("Enregistré");
+}
+
+function openMenu() {
+  openSheet(`<h3>Réglages</h3><div class="menu">
+    <button class="btn ghost" data-act="export">Copier une sauvegarde (texte)</button>
+    <button class="btn ghost" data-act="import">Restaurer une sauvegarde</button>
+    <button class="btn ghost" data-act="example">Charger les données d'exemple</button>
+    <button class="btn danger" data-act="wipe">Tout effacer</button>
+  </div><p class="label" style="font-size:12px;margin-top:14px">Tes données restent sur cet appareil, dans ce navigateur. Fais une sauvegarde de temps en temps.</p>`);
+}
+
+function toast(msg) {
+  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 1800);
+}
+
+/* ---------- Événements ---------- */
+document.querySelector("nav.tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-tab]"); if (!b) return;
+  ui.tab = b.dataset.tab; try { localStorage.setItem(KEY + ":tab", ui.tab); } catch (err) {}
+  render(); window.scrollTo(0, 0);
+});
+document.getElementById("fab").addEventListener("click", () => {
+  if (ui.tab === "accounts") return openForm("acc");
+  if (ui.tab === "savings") return openForm("goal");
+  if (ui.tab === "budget") return openForm(ui.flux === "charges" ? "ch" : "rev");
+  openSheet(`<h3>Ajouter</h3><div class="menu">
+    <button class="btn ghost" data-add="ch">Une charge fixe</button>
+    <button class="btn ghost" data-add="rev">Un revenu</button>
+    <button class="btn ghost" data-add="acc">Un compte</button>
+    <button class="btn ghost" data-add="goal">Un objectif d'épargne</button>
+    <button class="btn ghost" data-add="inv">Un placement</button></div>`);
+});
+
+function handle(e) {
+  const t = e.target;
+  const tog = t.closest("[data-toggle]");
+  if (tog) {
+    e.stopPropagation();
+    const list = tog.dataset.toggle === "ch" ? S.charges : S.revenus;
+    const it = list.find((x) => x.id === tog.dataset.id); const c = ctx();
+    it.ov = { m: c.mk, done: !isDone(it, c) };
+    save(); render(); toast(it.ov.done ? "Marqué comme passé" : "Marqué à venir");
+    return;
+  }
+  const el = t.closest("[data-edit],[data-add],[data-go],[data-flux],[data-act],[data-del]");
+  if (!el) return;
+  const d = el.dataset;
+  if (d.edit) return openForm(d.edit, d.id);
+  if (d.add) return openForm(d.add);
+  if (d.go) { ui.tab = d.go; render(); window.scrollTo(0, 0); return; }
+  if (d.flux) { ui.flux = d.flux; render(); return; }
+  if (d.del) {
+    if (el.dataset.armed) {
+      const F = FORMS[d.del]; S[F.list] = S[F.list].filter((x) => x.id !== d.id);
+      save(); closeSheet(); render(); toast("Supprimé");
+    } else { el.dataset.armed = "1"; el.textContent = "Confirmer ?"; }
+    return;
+  }
+  switch (d.act) {
+    case "menu": return openMenu();
+    case "budget": return openForm("budget");
+    case "start": S = blank(); save(); ui.tab = "accounts"; render(); return openForm("acc");
+    case "example": S = example(); save(); closeSheet(); render(); return toast("Exemple chargé");
+    case "wipe":
+      if (el.dataset.armed) { S = blank(); save(); closeSheet(); render(); toast("Tout est effacé"); }
+      else { el.dataset.armed = "1"; el.textContent = "Confirmer : tout effacer"; }
+      return;
+    case "export": {
+      const txt = JSON.stringify(S);
+      openSheet(`<h3>Sauvegarde</h3><div class="field"><label for="bk-out">Copie ce texte et garde-le (Notes, mail…)</label><textarea id="bk-out" rows="6" readonly style="background:var(--glass);border:1px solid var(--line);border-radius:14px;padding:12px;width:100%;color:var(--ink);font-size:12px">${esc(txt)}</textarea></div><div class="actions"><button class="btn" data-act="copy">Copier</button></div>`);
+      return;
+    }
+    case "copy": {
+      const ta = document.getElementById("bk-out");
+      const ok = () => toast("Copié");
+      if (navigator.clipboard) navigator.clipboard.writeText(ta.value).then(ok, () => { ta.select(); toast("Sélectionné, copie-le"); });
+      else { ta.select(); toast("Sélectionné, copie-le"); }
+      return;
+    }
+    case "import":
+      openSheet(`<h3>Restaurer</h3><form data-import novalidate><div class="field"><label for="bk-in">Colle ta sauvegarde</label><textarea id="bk-in" rows="6" style="background:var(--glass);border:1px solid var(--line);border-radius:14px;padding:12px;width:100%;color:var(--ink);font-size:12px"></textarea></div><div class="actions"><button class="btn" type="submit">Restaurer</button></div></form>`);
+      return;
+  }
+}
+document.addEventListener("click", (e) => {
+  if (e.target.matches("[data-close]")) return closeSheet();
+  handle(e);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeSheet();
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches('[role="button"]')) { e.preventDefault(); handle(e); }
+});
+document.addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (e.target.matches("[data-import]")) {
+    try { S = Object.assign(blank(), JSON.parse(document.getElementById("bk-in").value)); save(); closeSheet(); render(); toast("Sauvegarde restaurée"); }
+    catch (err) { toast("Texte invalide : colle la sauvegarde complète"); }
+    return;
+  }
+  submitForm(e.target);
+});
+
+render();
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
