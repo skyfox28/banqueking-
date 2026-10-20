@@ -16,8 +16,8 @@ Ouvrir `index.html`, ou servir le dossier (`npx serve .`). Sur iPhone, une fois 
 
 ## Cours de bourse automatiques
 
-La GitHub Action `.github/workflows/pages.yml` publie l'app sur GitHub Pages et, toutes les 30 min en semaine, récupère les cours (Yahoo Finance) des symboles listés dans `tickers.txt` ainsi que les taux de change, dans `prices.json`. L'app lit ce fichier pour calculer les plus ou moins-values (PEA et compte-titres) et l'impôt estimé.
+La GitHub Action `.github/workflows/publier.yml` publie l'app sur la branche `gh-pages` et, toutes les 30 min en semaine, récupère les cours (Yahoo Finance) des symboles listés dans `tickers.txt` ainsi que les taux de change, dans `prices.json`. L'app lit ce fichier pour calculer les plus ou moins-values (PEA et compte-titres) et l'impôt estimé.
 
 Pour suivre une nouvelle action : ajoute son symbole dans `tickers.txt` (ex. `MSFT`, `MC.PA`). Seuls les symboles sont publics ; quantités et prix d'achat restent sur le téléphone.
 
-Première mise en route : Settings → Pages → Source : **GitHub Actions**, puis relancer l'Action.
+Le site est publié depuis la branche `gh-pages` (Settings → Pages → Deploy from a branch → gh-pages / root).
