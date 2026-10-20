@@ -153,7 +153,14 @@ nav.tabs button[aria-current="page"] { color: var(--ink); }
 @keyframes up { from { transform: translateY(30px); opacity: .6; } }
 @media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
 .grab { width: 40px; height: 5px; border-radius: 9px; background: var(--line); margin: 0 auto 14px; }
-.sheet h3 { font-size: 20px; margin: 0 0 16px; }
+.sheet h3 { font-size: 20px; margin: 0 0 16px; padding-right: 48px; }
+.sheet { position: relative; touch-action: pan-y; }
+.sheet-x { position: absolute; top: 14px; right: max(16px, env(safe-area-inset-right, 0px)); width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--glass-hi); color: var(--ink); display: grid; place-items: center; }
+.sheet-x svg { width: 18px; height: 18px; }
+.signed { display: flex; gap: 8px; }
+.signed input { flex: 1; min-width: 0; }
+.sign { flex: none; width: 64px; border-radius: 14px; border: 1px solid var(--line); background: var(--glass-hi); font-size: 20px; font-weight: 700; }
+.sign[aria-pressed="true"] { background: rgba(239,100,112,.18); color: var(--minus); border-color: rgba(239,100,112,.4); }
 .sheet form { display: flex; flex-direction: column; gap: 14px; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label { color: var(--mute); font-size: 13px; font-weight: 500; }
@@ -608,7 +615,7 @@ const FORMS = {
   acc: { list: "accounts", title: "compte", fields: [
     { k: "nom", l: "Nom du compte", t: "text", ph: "Compte courant" },
     { k: "type", l: "Type", t: "select", o: ACC_TYPES },
-    { k: "solde", l: "Solde actuel (négatif si à découvert)", t: "money", ph: "-120,50" },
+    { k: "solde", l: "Solde actuel", t: "money", neg: true, ph: "120,50", hint: "À découvert ? Touche le bouton − pour passer le solde en négatif." },
     { k: "decouvert", l: "Découvert autorisé", t: "money", ph: "0", hint: "Montant positif. 0 si pas de découvert." },
     { k: "inclus", l: "Compter ce compte dans le reste du mois", t: "check" },
   ], def: { type: "Courant", solde: 0, decouvert: 0, inclus: true } },
@@ -657,10 +664,31 @@ const parseMoney = (v) => { const n = parseFloat(String(v).replace(/\s/g, "").re
 const fmtInput = (v) => (v === undefined || v === null || v === "" ? "" : String(v).replace(".", ","));
 
 function openSheet(html) {
-  $layer.innerHTML = `<div class="scrim" data-close><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div></div>`;
+  $layer.innerHTML = `<div class="scrim" data-close><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>
+    <button type="button" class="sheet-x" data-close-btn aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="pointer-events:none"><path d="M6 6l12 12M18 6 6 18"/></svg></button>${html}</div></div>`;
+  enableSwipe($layer.querySelector(".sheet"));
   const f = $layer.querySelector("input,select,button"); if (f && !matchMedia("(pointer:coarse)").matches) f.focus();
 }
 function closeSheet() { $layer.innerHTML = ""; }
+// Glisser la feuille vers le bas pour la fermer (quand elle est déjà en haut de son défilement).
+function enableSwipe(sheet) {
+  let y0 = null, dy = 0;
+  sheet.addEventListener("touchstart", (e) => {
+    if (sheet.scrollTop > 0 || e.target.closest("input,select,textarea")) { y0 = null; return; }
+    y0 = e.touches[0].clientY; dy = 0; sheet.style.transition = "none";
+  }, { passive: true });
+  sheet.addEventListener("touchmove", (e) => {
+    if (y0 == null) return;
+    dy = e.touches[0].clientY - y0;
+    if (dy > 0) { sheet.style.transform = `translateY(${dy}px)`; e.preventDefault(); }
+  }, { passive: false });
+  sheet.addEventListener("touchend", () => {
+    if (y0 == null) return;
+    y0 = null; sheet.style.transition = "transform .2s ease-out";
+    if (dy > 90) { sheet.style.transform = "translateY(100%)"; setTimeout(closeSheet, 180); }
+    else sheet.style.transform = "";
+  });
+}
 
 function openForm(kind, id) {
   const F = FORMS[kind];
@@ -673,6 +701,10 @@ function openForm(kind, id) {
     let input;
     if (f.t === "select") input = `<select id="${fid}" name="${f.k}">${f.o.map((o) => `<option ${o === v ? "selected" : ""}>${o}</option>`).join("")}</select>`;
     else if (f.t === "day") input = `<input id="${fid}" name="${f.k}" type="number" inputmode="numeric" min="1" max="31" required value="${esc(v)}">`;
+    else if (f.t === "money" && f.neg) {
+      const isNeg = Number(v) < 0;
+      input = `<div class="signed"><button type="button" class="sign" data-sign="${fid}" aria-pressed="${isNeg}" aria-label="Solde négatif">${isNeg ? "−" : "+"}</button><input id="${fid}" name="${f.k}" type="text" inputmode="decimal" placeholder="${esc(f.ph || "0")}" value="${esc(v ? fmtInput(Math.abs(v)) : "")}"></div>`;
+    }
     else if (f.t === "money") input = `<input id="${fid}" name="${f.k}" type="text" inputmode="decimal" placeholder="${esc(f.ph || "0")}" value="${esc(v === 0 && f.k === "prixManuel" ? "" : fmtInput(v))}">`;
     else if (f.t === "opt") input = `<input id="${fid}" name="${f.k}" type="text" placeholder="${esc(f.ph || "")}" value="${esc(v)}" autocomplete="off">`;
     else input = `<input id="${fid}" name="${f.k}" type="text" required autocapitalize="${f.k === "ticker" ? "characters" : "sentences"}" placeholder="${esc(f.ph || "")}" value="${esc(v)}" autocomplete="off">`;
@@ -689,7 +721,11 @@ function submitForm(form) {
   for (const f of F.fields) {
     const el = form.elements[f.k];
     if (f.t === "check") data[f.k] = el.checked;
-    else if (f.t === "money") data[f.k] = parseMoney(el.value);
+    else if (f.t === "money") {
+      data[f.k] = parseMoney(el.value);
+      const sb = form.querySelector(`[data-sign="${el.id}"]`);
+      if (sb) data[f.k] = Math.abs(data[f.k]) * (sb.getAttribute("aria-pressed") === "true" ? -1 : 1);
+    }
     else if (f.t === "day") data[f.k] = Math.min(31, Math.max(1, parseInt(el.value, 10) || 1));
     else data[f.k] = el.value.trim();
     if (f.t === "text" && !data[f.k]) { el.focus(); el.style.borderColor = "var(--minus)"; return; }
@@ -743,6 +779,12 @@ document.getElementById("fab").addEventListener("click", () => {
 
 function handle(e) {
   const t = e.target;
+  const sg = t.closest("[data-sign]");
+  if (sg) {
+    const on = sg.getAttribute("aria-pressed") !== "true";
+    sg.setAttribute("aria-pressed", on); sg.textContent = on ? "−" : "+";
+    return;
+  }
   const tog = t.closest("[data-toggle]");
   if (tog) {
     e.stopPropagation();
