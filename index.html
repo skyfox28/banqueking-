@@ -707,7 +707,7 @@ function submitForm(form) {
 function openMenu() {
   openSheet(`<h3>Réglages</h3><div class="menu">
     <button class="btn ghost" data-act="export">Copier une sauvegarde (texte)</button>
-    <button class="btn ghost" data-act="import">Restaurer une sauvegarde</button>
+    <button class="btn ghost" data-act="import">Restaurer ou importer</button>
     <button class="btn ghost" data-act="fisc">Fiscalité des placements</button>
     <button class="btn ghost" data-act="example">Charger les données d'exemple</button>
     <button class="btn danger" data-act="wipe">Tout effacer</button>
@@ -768,6 +768,7 @@ function handle(e) {
   }
   switch (d.act) {
     case "menu": return openMenu();
+    case "doimport": return mergeImport(window.__import || {});
     case "budget": return openForm("budget");
     case "fisc": return openForm("fisc");
     case "prices": return loadPrices(true);
@@ -795,7 +796,7 @@ function handle(e) {
   }
 }
 document.addEventListener("click", (e) => {
-  if (e.target.matches("[data-close]")) return closeSheet();
+  if (e.target.matches("[data-close], [data-close-btn]")) return closeSheet();
   handle(e);
 });
 document.addEventListener("keydown", (e) => {
@@ -805,14 +806,46 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("submit", (e) => {
   e.preventDefault();
   if (e.target.matches("[data-import]")) {
-    try { S = Object.assign(blank(), JSON.parse(document.getElementById("bk-in").value)); save(); closeSheet(); render(); toast("Sauvegarde restaurée"); }
-    catch (err) { toast("Texte invalide : colle la sauvegarde complète"); }
+    try {
+      const data = JSON.parse(document.getElementById("bk-in").value);
+      if (data.import === "banqueking") return mergeImport(data);
+      S = Object.assign(blank(), data); save(); closeSheet(); render(); toast("Sauvegarde restaurée");
+    } catch (err) { toast("Texte invalide : colle la sauvegarde complète"); }
     return;
   }
   submitForm(e.target);
 });
 
+/* ---------- Import de charges / revenus ----------
+   Un import { import: "banqueking", charges: [...], revenus: [...] } s'ajoute aux données
+   existantes (sans doublon nom + jour). Il peut arriver collé dans « Restaurer » ou via un lien #import=… */
+function mergeImport(data) {
+  if (S.example) S = blank();
+  let n = 0;
+  for (const list of ["charges", "revenus"]) {
+    for (const it of data[list] || []) {
+      if (S[list].some((x) => x.nom.toLowerCase() === it.nom.toLowerCase() && Number(x.jour) === Number(it.jour))) continue;
+      S[list].push({ id: uid(), ...it }); n++;
+    }
+  }
+  save(); closeSheet(); ui.tab = "budget"; render();
+  toast(n ? `${n} élément${n > 1 ? "s" : ""} ajouté${n > 1 ? "s" : ""}` : "Déjà importé");
+}
+function importFromHash() {
+  if (!location.hash.startsWith("#import=")) return;
+  try {
+    const b64 = location.hash.slice(8).replace(/-/g, "+").replace(/_/g, "/");
+    const data = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))));
+    history.replaceState(null, "", location.pathname);
+    const nc = (data.charges || []).length, nr = (data.revenus || []).length;
+    window.__import = data;
+    openSheet(`<h3>Importer</h3><p class="label">${nc} charge${nc > 1 ? "s" : ""} fixe${nc > 1 ? "s" : ""} (${money(sum(data.charges || [], (x) => x.montant))}) et ${nr} revenu${nr > 1 ? "s" : ""} (${money(sum(data.revenus || [], (x) => x.montant))}) vont s'ajouter à tes données.</p>
+      <div class="actions"><button class="btn ghost" data-close-btn>Annuler</button><button class="btn" data-act="doimport">Importer</button></div>`);
+  } catch (e) { toast("Lien d'import invalide"); }
+}
+
 render();
+importFromHash();
 loadPrices();
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>
