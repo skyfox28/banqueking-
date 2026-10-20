@@ -14,11 +14,11 @@ if (process.env.PAGES_URL) {
 async function quote(sym) {
   for (const host of ["query1", "query2"]) {
     try {
-      const r = await fetch(`https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=5d&interval=1d`, { headers: UA });
+      const r = await fetch(`https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=1d`, { headers: UA });
       if (!r.ok) continue;
       const m = (await r.json()).chart?.result?.[0]?.meta;
       if (m?.regularMarketPrice) {
-        return { price: m.regularMarketPrice, prev: m.chartPreviousClose ?? m.previousClose ?? null, currency: m.currency, name: m.shortName || m.longName || sym, time: m.regularMarketTime ? new Date(m.regularMarketTime * 1000).toISOString() : null };
+        return { price: m.regularMarketPrice, prev: m.previousClose ?? m.chartPreviousClose ?? null, currency: m.currency, name: m.shortName || m.longName || sym, time: m.regularMarketTime ? new Date(m.regularMarketTime * 1000).toISOString() : null };
       }
     } catch {}
   }
