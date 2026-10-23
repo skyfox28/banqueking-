@@ -1,0 +1,33 @@
+{
+  "updated": "2026-10-23T23:57:15.762Z",
+  "fx": {
+    "USD": 1.1204,
+    "GBP": 0.8376,
+    "CHF": 0.9237,
+    "CAD": 1.5687,
+    "JPY": 175.723
+  },
+  "quotes": {
+    "CW8.PA": {
+      "price": 706.01,
+      "prev": 706.32,
+      "currency": "EUR",
+      "name": "Amundi MSCI World Swap UCITS ET",
+      "time": "2026-10-23T15:35:13.000Z"
+    },
+    "AAPL": {
+      "price": 347.725,
+      "prev": 348.22,
+      "currency": "USD",
+      "name": "Apple Inc.",
+      "time": "2026-10-23T20:00:01.000Z"
+    },
+    "NVDA": {
+      "price": 210.96,
+      "prev": 212.21,
+      "currency": "USD",
+      "name": "NVIDIA Corporation",
+      "time": "2026-10-23T20:00:00.000Z"
+    }
+  }
+}
